@@ -561,7 +561,7 @@ static int cfInsertCommon(RedisModuleCtx *ctx, RedisModuleString *keystr, RedisM
         return RedisModule_ReplyWithError(ctx, statusStrerror(status));
     }
 
-    if (cf->numFilters >= cf->maxExpansionCount) {
+    if (cf->numFilters > CFMaxExpansions) {
         // Ensure that adding new elements does not cause heavy expansion.
         // We might want to find a way to better distinguish legitimate from malicious
         // additions.
