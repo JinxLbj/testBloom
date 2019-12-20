@@ -238,7 +238,7 @@ static CuckooInsertStatus CuckooFilter_InsertFP(CuckooFilter *filter, const Look
     }
 
     // Adjust maxExpansionCount
-    if (filter->numFilters < filter->maxExpansionCount && CuckooFilter_Grow(filter) != 0) {
+    if (filter->numFilters >= filter->maxExpansionCount || CuckooFilter_Grow(filter) != 0) {
         return CuckooInsert_MemAllocFailed;
     }
 
