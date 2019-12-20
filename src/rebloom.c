@@ -14,6 +14,7 @@
 #define CF_MAX_ITERATIONS 20
 #define CF_DEFAULT_BUCKETSIZE 2
 #define CF_DEFAULT_EXPANSION 1
+#define CF_DEFAULT_MAXEXPANSIONCOUNT 32
 #define BF_DEFAULT_EXPANSION 2
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -94,11 +95,11 @@ static SBChain *bfCreateChain(RedisModuleKey *key, double error_rate,
 }
 
 static CuckooFilter *cfCreate(RedisModuleKey *key, size_t capacity,
-                        size_t bucketSize, size_t maxIterations, size_t expansion) {
+                        size_t bucketSize, size_t maxIterations, size_t expansion, size_t maxExpansionCount) {
     if (capacity < bucketSize * 2) return NULL;
     
     CuckooFilter *cf = RedisModule_Calloc(1, sizeof(*cf));
-    if (CuckooFilter_Init(cf, capacity, bucketSize, maxIterations, expansion) != 0) {
+    if (CuckooFilter_Init(cf, capacity, bucketSize, maxIterations, expansion, maxExpansionCount) != 0) {
         RedisModule_Free(cf); // LCOV_EXCL_LINE
         cf = NULL; // LCOV_EXCL_LINE
     }
@@ -470,7 +471,7 @@ static int BFLoadChunk_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **arg
     }
 }
 
-/** CF.RESERVE <KEY> <CAPACITY> [BUCKETSIZE] [MAXITERATIONS] [EXPANSION] */
+/** CF.RESERVE <KEY> <CAPACITY> [BUCKETSIZE] [MAXITERATIONS] [EXPANSION] [MAXEXPANSIONCOUNT]*/
 static int CFReserve_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) {
     RedisModule_AutoMemory(ctx);
     //
@@ -507,6 +508,18 @@ static int CFReserve_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
         }
     }
 
+    long long maxExpansionCount = CF_DEFAULT_MAXEXPANSIONCOUNT;
+    int mec_loc = RMUtil_ArgIndex("MAXEXPANSIONCOUNT", argv, argc);
+    if (mec_loc != -1) {
+        if (RedisModule_StringToLongLong(argv[mec_loc + 1], &maxExpansionCount) != REDISMODULE_OK) {
+            return RedisModule_ReplyWithError(ctx, "Couldn't parse EXPANSION");
+        }
+    }
+
+    if (maxExpansionCount > 32) {
+        maxExpansionCount = 32;
+    }
+
     if (bucketSize * 2 > capacity) {
         return RedisModule_ReplyWithError(ctx, "Capacity must be at least (BucketSize * 2)");
     }
@@ -518,7 +531,7 @@ static int CFReserve_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv,
         return RedisModule_ReplyWithError(ctx, statusStrerror(status));
     }
 
-    cf = cfCreate(key, capacity, bucketSize, maxIterations, expansion);
+    cf = cfCreate(key, capacity, bucketSize, maxIterations, expansion, maxExpansionCount);
     if (cf == NULL) {
         return RedisModule_ReplyWithError(ctx, "Couldn't create Cuckoo Filter"); // LCOV_EXCL_LINE
     } else {
@@ -541,14 +554,14 @@ static int cfInsertCommon(RedisModuleCtx *ctx, RedisModuleString *keystr, RedisM
     int status = cfGetFilter(key, &cf);
 
     if (status == SB_EMPTY && options->autocreate) {
-        if ((cf = cfCreate(key, options->capacity, CF_DEFAULT_BUCKETSIZE, CF_MAX_ITERATIONS, CF_DEFAULT_EXPANSION)) == NULL) {
+        if ((cf = cfCreate(key, options->capacity, CF_DEFAULT_BUCKETSIZE, CF_MAX_ITERATIONS, CF_DEFAULT_EXPANSION, CF_DEFAULT_MAXEXPANSIONCOUNT)) == NULL) {
             return RedisModule_ReplyWithError(ctx, "Could not create filter"); // LCOV_EXCL_LINE
         }
     } else if (status != SB_OK) {
         return RedisModule_ReplyWithError(ctx, statusStrerror(status));
     }
 
-    if (cf->numFilters >= CFMaxExpansions) {
+    if (cf->numFilters >= cf->maxExpansionCount) {
         // Ensure that adding new elements does not cause heavy expansion.
         // We might want to find a way to better distinguish legitimate from malicious
         // additions.
@@ -933,6 +946,8 @@ static int CFInfo_RedisCommand(RedisModuleCtx *ctx, RedisModuleString **argv, in
     RedisModule_ReplyWithLongLong(ctx, cf->expansion);
     RedisModule_ReplyWithSimpleString(ctx, "Max iterations");
     RedisModule_ReplyWithLongLong(ctx, cf->maxIterations);
+    RedisModule_ReplyWithSimpleString(ctx, "Max Expansion Count");
+    RedisModule_ReplyWithLongLong(ctx, cf->maxExpansionCount);
 
     return REDISMODULE_OK;
 }

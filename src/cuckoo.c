@@ -31,12 +31,13 @@ static uint64_t getNextN2(uint64_t n) {
     return n;
 }
 
-int CuckooFilter_Init(CuckooFilter *filter, uint64_t capacity, uint16_t bucketSize, uint16_t maxIterations, uint16_t expansion) {
+int CuckooFilter_Init(CuckooFilter *filter, uint64_t capacity, uint16_t bucketSize, uint16_t maxIterations, uint16_t expansion, uint16_t maxExpansionCount) {
     memset(filter, 0, sizeof(*filter));
     filter->expansion = getNextN2(expansion);
     filter->bucketSize = bucketSize;
     filter->maxIterations = maxIterations;
     filter->numBuckets = getNextN2(capacity / bucketSize);
+    filter->maxExpansionCount = maxExpansionCount;
     if (filter->numBuckets == 0) {
         filter->numBuckets = 1; 
     }

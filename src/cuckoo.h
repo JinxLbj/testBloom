@@ -32,6 +32,7 @@ typedef struct {
     uint16_t bucketSize;
     uint16_t maxIterations;
     uint16_t expansion;
+    uint16_t maxExpansionCount;
     SubCF *filters;
 } CuckooFilter;
 
@@ -58,7 +59,7 @@ typedef enum {
 
 int CuckooFilter_Init(CuckooFilter *filter,
                       uint64_t capacity, uint16_t bucketSize, 
-                      uint16_t maxIterations, uint16_t expansion);
+                      uint16_t maxIterations, uint16_t expansion, uint16_t maxExpansionCount);
 void CuckooFilter_Free(CuckooFilter *filter);
 CuckooInsertStatus CuckooFilter_InsertUnique(CuckooFilter *filter, CuckooHash hash);
 CuckooInsertStatus CuckooFilter_Insert(CuckooFilter *filter, CuckooHash hash);
